@@ -1,0 +1,160 @@
+---
+title: "Array Based CpG Region Analysis Package (ABC.RAP)"
+author: "Abdulmonem A. Alsaleh, Robert J. Weeks, Ian M. Morison. Department of Pathology, Dunedin School of Medicine, University of Otago, Dunedin, New Zealand"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Array Based CpG Region Analysis Package (ABC.RAP)}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+ABC-RAP package was developed to analyse human 450k DNA methylation array data and to identify candidate genes that have significant differences in DNA methylation between cases and controls. The following example analysis is based on a small sample dataset "test_data" (included) containing 10,000 probes for 2 B-ALL cases and 2 controls from Busche *et al* (2013).
+
+Busche S, Ge B, Vidal R, etc. Integration of high-resolution methylome and transcriptome analyses to dissect epigenomic changes in childhood acute lymphoblastic leukaemia. Cancer Research 2013; 73(14); 4323-4336.
+
+## Loading Files
+
+```{r read.csv, echo=TRUE}
+library(ABC.RAP)
+data("test_data")
+data("nonspecific_probes")
+data("annotation_file")
+```
+
+## Summary of the workflow
+
+The package offers a choice of two workflows:
+
+1. Step by step as follows
+
+2. Using a single script (see "using one script" section)
+
+Below is the package workflow using nine functions, and each step is dependent on the previous function.
+
+Filtering the nonspecific probes:
+```{r filter, echo=TRUE}
+test_data_filtered <- filter_data(test_data)
+```
+
+Annotation based on "UCSC platform":
+```{r annotation, echo=TRUE}
+test_data_annotated <- annotate_data(test_data_filtered)
+```
+
+## Browsing the data
+
+This function provides a general overview for the DNA methylation between cases and controls. It produces 4 plots: the upper 2 plots show DNA methylation (distribution) for cases (left) and controls (right). The left bottom plot compares the DNA methylation between cases and controls, and the right bottom plot represents the difference in DNA methylation between cases and controls (cases minus controls). Also, summary statistics for the difference in mean DNA methylation between cases and controls is produced.
+
+Function arguments:
+
+x = the filtered 450k probes from filter_data() function. In this example, it is "test_data_filtered".
+
+cases_column_1 = the first column (column number) for cases in the filtered dataset. In this example, it is column 1.
+
+cases_column_n = the last column (column number) for cases in the filtered dataset. In this example, it is column 2.
+
+controls_column_1 = the first column (column number) for controls in the filtered dataset. In this example, it is column 3.
+
+controls_column_n = the last column (column number) for controls in the filtered dataset. In this example, it is column 4.
+
+```{r plot_data, echo=TRUE, fig.height= 7, fig.width= 10}
+plot_data(test_data_filtered, 1, 2, 3, 4)
+```
+
+## Applying t-test
+
+This function applies a "two.sided", unequal variance t-test analysis, then selects p-values that are less than or equal to the cutoff value entered. For this example, a cutoff value of 1e-3 is used:
+```{r t.test, echo=TRUE}
+test_data_ttest <- ttest_data(test_data_filtered, 1, 2, 3, 4, 1e-3)
+```
+
+Checking number of rows from t-test output:
+```{r nrow2, echo=TRUE}
+nrow(test_data_ttest)
+```
+
+## Delta beta analysis
+
+This function calculates the difference between the beta values of cases and controls. It requires the minimum desired difference in proportion of DNA methylation for cases minus controls (delta_meth) and for controls minus cases (delta_unmeth). In this example, delta_meth is 0.5 and delta_unmeth is -0.5 which are based on the values from summary statistics from plot_data() function. Also it provides the option to specify probes where the average beta value of the cases or controls is greater than a cutoff value (e.g. 0.94) or less than a cutoff value (e.g. 0.06).
+
+```{r delta_beta, echo=TRUE}
+test_delta_beta <- delta_beta_data(test_data_filtered, 1, 2, 3, 4, 0.5, -0.5, 0.94, 0.06)
+```
+
+Checking the number of rows from delta beta analysis:
+```{r nrow3, echo=TRUE}
+nrow(test_delta_beta)
+```
+
+## Overlapping t-test and delta beta outputs
+
+The following function overlaps the results of the previous 2 analyses:
+```{r overlap, echo=TRUE}
+test_overlapped_data <- overlap_data(test_data_ttest, test_delta_beta)
+```
+
+Checking the number of rows (CpG sites) that are overlapping between the two analyses:
+```{r nrow, echo=TRUE}
+nrow(test_overlapped_data)
+```
+
+## Identifying genes for which multiple CpG sites show significant methylation differences:
+
+```{r CpG_hits, echo=TRUE}
+test_CpG_hits <- CpG_hits(test_overlapped_data)
+```
+
+Gene names and their number of significantly different CpG sites:
+```{r CpG_hits2, echo=TRUE}
+test_CpG_hits
+```
+
+Plotting the candidate genes:
+```{r plot, echo=TRUE, fig.height=5, fig.width=7}
+plot_candidate_genes(test_overlapped_data)
+```
+
+## Investigating candidate genes:
+
+"plot_gene" function generates four plots for any investigated gene: plot 1 (top left) shows the difference in beta values between cases and controls for each probe; plot 2 (top right) shows the mean methylation level for cases (red circles) and controls (blue triangles); and plots 3 and 4 (bottom plots) show the distribution of DNA methylation for each probe, for cases and controls, respectively. Also, an annotation table for all probes arranged from 5' to 3' is generated with the following columns: probe names, gene name, distance from transcription start site (TSS), mean methylation for cases, mean methylation for controls, delta beta (cases minus controls), and t-test p.value. KLHL34 is used as an example:
+
+Function arguments:
+
+x = the filtered and annotated 450k probes. In this example, it is "test_data_annotated"
+
+b = gene name between quotation marks. In this example, "KLHL34" is used.
+
+```{r investigate, echo=TRUE, fig.height=7, fig.width=10}
+KLHL34 <- plot_gene(test_data_annotated, "KLHL34", 1, 2, 3, 4)
+```
+
+## Using one script:
+
+Here is one script that applies all the previous scripts and produce plots for candidate genes automatically. The function exports two files onto the current working directory: 1. "process.ABC.RAP.plots.pdf" containing plots for all the candidate genes, and 2. "process.ABC.RAP.tables.txt" containing the annotation tables for the candidate genes.
+
+Function arguments on the following order:
+
+x = The normalised beta values in a data matrix format, where conditions are arranged in columns and cg probes are arranged in rows. In this example, it is "test_data".
+
+cases_column_1 = the first column (column number) for cases in the filtered dataset. In this example, it is column 1.
+
+cases_column_n = the last column (column number) for cases in the filtered dataset. In this example, it is column 2.
+
+controls_column_1 = the first column (column number) for controls in the filtered dataset. In this example, it is column 3.
+
+controls_column_n = the last column (column number) for controls in the filtered dataset. In this example, it is column 4.
+
+ttest_cutoff = the cutoff level to filter insignificant p-values. In this example, a cutoff value of 1e-3 is used.
+
+meth_cutoff = the cutoff level for the methylation difference between cases and controls (cases minus controls). In this example, a cutoff value of 0.5 is used.
+
+unmeth_cutoff = the cutoff level for the methylation difference between controls and cases (cases minus controls), consequently it is a negative value. In this example, a cutoff value of -0.5 is used.
+
+high_meth = the upper margin for the desired highly methylated probes. In this example, a value of 0.94 is used.
+
+low_meth = the lower margin for the desired highly unmethylated probes. In this example, a value of 0.06 is used.
+
+```{r process, echo=TRUE}
+process.ABC.RAP(test_data, 1, 2, 3, 4, 1e-3, 0.5, -0.5, 0.94, 0.06)
+```
